@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  AWS CloudFormation Sample Template for sending Aurora DB cluster logs to CloudWatch
+  Logs: Sample template showing how to create an Aurora PostgreSQL DB cluster that
+  exports logs to CloudWatch Logs. **WARNING** This template enables log exports to
+  CloudWatch Logs. You will be billed for the AWS resources used if you create a stack
+  from this template.
+Parameters:
+  DBUsername:
+    NoEcho: 'true'
+    Description: Username for PostgreSQL database access
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+  DBPassword:
+    NoEcho: 'true'
+    Description: Password for PostgreSQL database access
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+Resources:
+  KmsKey:
+    Type: AWS::KMS::Key
+  RDSGoodCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: !Ref 'DBUsername'
+      MasterUserPassword: !Ref 'DBPassword'
+      DBClusterIdentifier: aurora-postgresql-cluster
+      Engine: aurora-postgresql
+      EngineVersion: '10.7'
+      BacktrackWindow: 2
+      DeletionProtection: true
+      EnableIAMDatabaseAuthentication: true
+      StorageEncrypted: true
+      BackupRetentionPeriod: 30
+      KmsKeyId: !Ref 'KmsKey'
+      DBClusterParameterGroupName: default.aurora-postgresql10
+      EnableCloudwatchLogsExports:
+        - postgresql
+  RDSCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: !Ref 'DBUsername'
+      MasterUserPassword: !Ref 'DBPassword'
+      DeletionProtection: false
+      DBClusterIdentifier: aurora-postgresql-cluster
+      Engine: aurora-postgresql
+      EngineVersion: '10.7'
+      StorageEncrypted: false
+      DBClusterParameterGroupName: default.aurora-postgresql10
+      EnableCloudwatchLogsExports:
+        - postgresql
+  RDSGoodInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: aurora-postgresql-instance1
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref 'RDSCluster'
+      BackupRetentionPeriod: 30
+      DeletionProtection: true
+      EnableCloudwatchLogsExports: true
+      CopyTagsToSnapshot: true
+      StorageEncrypted: true
+      EnableIAMDatabaseAuthentication: true
+      KmsKeyId: !Ref 'KmsKey'
+      AutoMinorVersionUpgrade: true
+      PubliclyAccessible: 'false'
+      DBInstanceClass: db.r4.large
+  RDSDBInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: aurora-postgresql-instance1
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref 'RDSCluster'
+      DeletionProtection: false
+      BackupRetentionPeriod: 7
+      EnableCloudwatchLogsExports: false
+      CopyTagsToSnapshot: false
+      EnableIAMDatabaseAuthentication: false
+      MaxAllocatedStorage: 100
+      StorageEncrypted: false
+      AutoMinorVersionUpgrade: false
+      PubliclyAccessible: 'true'
+      DBInstanceClass: db.r4.large
+  RDSDBInstance2:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: aurora-postgresql-instance2
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref 'RDSCluster'
+      MaxAllocatedStorage: 100
+      PubliclyAccessible: 'true'
+      DBInstanceClass: db.r4.large
+      StorageEncrypted: true

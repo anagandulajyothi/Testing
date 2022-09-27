@@ -1,0 +1,79 @@
+{
+  "viewportWidth": 1280,
+  "viewportHeight": 720,
+  "defaultCommandTimeout": 80000,
+  "pageLoadTimeout": 80000,
+  "requestTimeout": 80000,
+  "responseTimeout": 80000,
+  "watchForFileChanges": false,
+  "chromeWebSecurity": false,
+  "testFiles": [
+    
+    "attributeTag.spec.js",
+    "policyGroupTemplate.spec.js",
+    "policyGroup.spec.js",
+    "buildTimeInventory.spec.js",
+    "manageInstutions.spec.js",
+    "logicalDeployment.spec.js",
+    "approvals.spec.js",
+    "suppressions.spec.js",
+    "groups.spec.js",
+    "surface.spec.js",
+    "nestedTemplates.spec.js", 
+    "controlcatlogs.spec.js",
+    "azurePolicyGroupTemplate.spec.js",
+    "surfaceLayer.spec.js",
+    "azureNestedTemplates.spec.js",
+    "inviteUser.spec.js",
+    "requestforModel.spec.js",
+    "invariantPolicyGroup.spec.js",
+    "baseLineAssets.spec.js",
+    "requestforLogicalDeployment.spec.js",
+    "cloudAssetsTemplate.spec.js",
+    "cloudFormationInvariantPolicyGroup.spec.js",
+    "modelViolation.spec.js",
+    "policyViolations.spec.js",
+    "removeSurfaceLayerForPG.spec.js",
+    "policyViolationActions.spec.js",
+    "evaluateTest.spec.js",
+    "addAttributeTagForPG.spec.js",
+    "removeAtributeTagFromPG.spec.js",
+    "buildtimeInventoryWithYAML.spec.js",
+    "catalogsDashboardCount.spec.js",
+    "negativeAttributeTag.spec.js",
+    "negativeBaseline.spec.js",
+    "negativeBuildtimeInventory.spec.js",
+    "negativePolicyGroup.spec.js",
+    "negativePolicyGroupTemplate.spec.js",
+    "negativeGroups.spec.js",
+    "negativeCatalogs.spec.js",
+    "negativeSurface.spec.js",
+    "AWSRTPolicyGroup.spec.js",
+    "negativeSuppressions.spec.js",
+    "verifyBusinessAuthorAndOperatorRolePermissions.spec.js",
+    "verifyPolicyAuthorRolePermissions.spec.js",
+    "policyBank.spec.js",
+    "verifyPolicyBankPermission.spec.js"
+  ],
+
+  "retries": 0,
+  "reporter": "../node_modules/mochawesome/src/mochawesome.js",
+  "reporterOptions": {
+    "overwrite": false,
+    "html": false,
+    "json": true
+  },
+  "projectId": "vcvwwe",
+  "experimentalStudio": true,
+  "env": {
+    "db": {
+      "host": "db4free.net",
+      "user": "username",
+      "password": "password",
+      "database": "db_name"
+    }
+  },
+  "div": {
+    "overflow":  "visible | hidden | scroll | auto | inherit"
+  }
+}

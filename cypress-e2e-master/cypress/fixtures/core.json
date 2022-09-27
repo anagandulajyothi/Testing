@@ -1,0 +1,269 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Metadata": {},
+  "Parameters": {
+    "Encrypt": {
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ],
+      "Description": "True or False"
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs"
+    },
+    "NatSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-008c4281d7f616dd0,subnet-0d0f96d204d15b42d,subnet-0a095dc9cb9440ef5"
+    },
+    "PrivateSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-04154e1e45baecdd8,subnet-01afb6954d7cc5a30,subnet-0c2f7510d9d9826db"
+    },
+    "PublicSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-09d6e3f0afecbe82c,subnet-04f7a913b459dd298,subnet-0cd519558db089129"
+    },
+    "S3VpcEp": {
+      "Type": "String",
+      "Default": "vpce-014d753e96a27a411"
+    },
+    "SecurityGroup": {
+      "Type": "String",
+      "Default": "sg-0a58c1694b69370ee",
+      "Description": "Sec grp id"
+    },
+    "Subnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-0c871349f04d7e275, subnet-07bf24e7171e7d98f"
+    },
+    "Vpc": {
+      "Type": "String",
+      "Default": "vpc-0171c6dc35a7b34d1"
+    }
+  },
+  "Mappings": {},
+  "Conditions": {},
+  "Resources": {
+    "KmsKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "EnableKeyRotation": "True",
+        "Enabled": "True",
+        "KeyPolicy": {
+          "Id": "Concourse-Usage-Policy",
+          "Statement": [
+            {
+              "Sid": "Enable key usage for self",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Ref": "AWS::AccountId"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "AllowAttachmentOfPersistentResources",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Ref": "AWS::AccountId"
+                }
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:ListGrants",
+                "kms:RevokeGrant"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "Bool": {
+                  "kms:GrantIsForAWSResource": true
+                }
+              }
+            },
+            {
+              "Sid": "Enable Key usage for concourse",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Ref": "AWS::AccountId"
+                }
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:ListKeyPolicies",
+                "kms:ListRetirableGrants",
+                "kms:GetKeyPolicy",
+                "kms:GenerateDataKeyWithoutPlaintext",
+                "kms:ListResourceTags",
+                "kms:ReEncryptFrom",
+                "kms:ListGrants",
+                "kms:UpdateAlias",
+                "kms:GetParametersForImport",
+                "kms:TagResource",
+                "kms:Encrypt",
+                "kms:GetKeyRotationStatus",
+                "kms:GenerateDataKey",
+                "kms:CreateAlias",
+                "kms:ReEncryptTo",
+                "kms:DescribeKey",
+                "kms:DeleteAlias",
+                "kms:ListKeys",
+                "kms:ListAliases"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": [
+                    "backup.us-east-1.amazonaws.com",
+                    "connect.us-east-1.amazonaws.com",
+                    "directoryservice.us-east-1.amazonaws.com",
+                    "ec2.us-east-1.amazonaws.com",
+                    "elasticfilesystem.us-east-1.amazonaws.com",
+                    "es.us-east-1.amazonaws.com",
+                    "kafka.us-east-1.amazonaws.com",
+                    "kinesis.us-east-1.amazonaws.com",
+                    "lambda.us-east-1.amazonaws.com",
+                    "rds.us-east-1.amazonaws.com",
+                    "s3.us-east-1.amazonaws.com",
+                    "secretsmanager.us-east-1.amazonaws.com",
+                    "ses.us-east-1.amazonaws.com",
+                    "sns.us-east-1.amazonaws.com",
+                    "sqs.us-east-1.amazonaws.com",
+                    "ssm.us-east-1.amazonaws.com",
+                    "xray.us-east-1.amazonaws.com"
+                  ]
+                }
+              }
+            },
+            {
+              "Sid": "Enable cloudwatch Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "cloudwatch.amazonaws.com",
+                  "events.amazonaws.com",
+                  "sns.amazonaws.com",
+                  "sqs.amazonaws.com",
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "kms:GenerateDataKey",
+                "kms:Decrypt",
+                "kms:ReEncrypt",
+                "kms:Encrypt",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "KeyUsage": "ENCRYPT_DECRYPT"
+      }
+    },
+    "SGEgressRule1": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "Description": "Engress rule for selfRef",
+        "DestinationSecurityGroupId": {
+          "Fn::GetAtt": [
+            "SecSg",
+            "GroupId"
+          ]
+        },
+        "FromPort": "0",
+        "GroupId": {
+          "Fn::GetAtt": [
+            "SecSg",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "-1",
+        "ToPort": "65535"
+      }
+    },
+    "SGIngressRule1": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Ingress rule for selfRef",
+        "FromPort": "0",
+        "GroupId": {
+          "Fn::GetAtt": [
+            "SecSg",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "-1",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "SecSg",
+            "GroupId"
+          ]
+        },
+        "SourceSecurityGroupOwnerId": {
+          "Ref": "AWS::AccountId"
+        },
+        "ToPort": "65535"
+      }
+    },
+    "SGIngressRule2": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Ingress rule for bad stuff",
+        "CidrIp": "100.100.100.100/32",
+        "FromPort": "0",
+        "GroupId": {
+          "Fn::GetAtt": [
+            "SecSg",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "-1",
+        "ToPort": "65535"
+      }
+    },
+    "SecSg": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Self Referecing Security Group for Prod",
+        "GroupName": {
+          "Fn::Join": [
+            "-",
+            [
+              "SelfRefSg",
+              {
+                "Ref": "AWS::StackName"
+              }
+            ]
+          ]
+        },
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "KmsKeyArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "KmsKey",
+          "Arn"
+        ]
+      }
+    },
+    "SecurityGroup": {
+      "Value": {
+        "Ref": "SecSg"
+      }
+    }
+  }
+}

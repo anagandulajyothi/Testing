@@ -1,0 +1,208 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Metadata": {},
+  "Parameters": {
+    "Encrypt": {
+      "Type": "String",
+      "Default": "False",
+      "AllowedValues": [
+        "True",
+        "False"
+      ],
+      "Description": "True or False"
+    },
+    "LatestAmiId": {
+      "Default": "ami-0b898040803850657",
+      "Type": "String"
+    },
+    "NatSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-008c4281d7f616dd0,subnet-0d0f96d204d15b42d,subnet-0a095dc9cb9440ef5"
+    },
+    "PrivateSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-04154e1e45baecdd8,subnet-01afb6954d7cc5a30,subnet-0c2f7510d9d9826db"
+    },
+    "PublicSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-09d6e3f0afecbe82c,subnet-04f7a913b459dd298,subnet-0cd519558db089129"
+    },
+    "S3VpcEp": {
+      "Type": "String",
+      "Default": "vpce-014d753e96a27a411"
+    },
+    "SecurityGroup": {
+      "Type": "String",
+      "Default": "sg-0a58c1694b69370ee",
+      "Description": "Sec grp id"
+    },
+    "Subnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-0c871349f04d7e275, subnet-07bf24e7171e7d98f"
+    },
+    "Vpc": {
+      "Type": "String",
+      "Default": "vpc-0171c6dc35a7b34d1"
+    },
+    "VpcId": {
+      "Type": "String",
+      "Default": "vpc-0e632d5a5f99fad0e"
+    }
+  },
+  "Mappings": {},
+  "Conditions": {
+    "Encrypted": {
+      "Fn::Equals": [
+        {
+          "Ref": "Encrypt"
+        },
+        "True"
+      ]
+    }
+  },
+  "Resources": {
+    "Ec2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "DeleteOnTermination": "True",
+              "Encrypted": {
+                "Fn::If": [
+                  "Encrypted",
+                  "True",
+                  {
+                    "Ref": "AWS::NoValue"
+                  }
+                ]
+              },
+              "Iops": 200,
+              "VolumeSize": "50",
+              "VolumeType": "io1"
+            }
+          },
+          {
+            "DeviceName": "/dev/sdm",
+            "Ebs": {
+              "DeleteOnTermination": "True",
+              "Encrypted": {
+                "Fn::If": [
+                  "Encrypted",
+                  "True",
+                  {
+                    "Ref": "AWS::NoValue"
+                  }
+                ]
+              },
+              "VolumeSize": "100"
+            }
+          }
+        ],
+        "ImageId": {
+          "Fn::If": [
+            "Encrypted",
+            "ami-0e52796c8a8c65b00",
+            {
+              "Ref": "LatestAmiId"
+            }
+          ]
+        },
+        "InstanceType": "t3.micro",
+        "KeyName": "dev-ec2",
+        "NetworkInterfaces": [
+          {
+            "AssociatePublicIpAddress": "true",
+            "DeviceIndex": "0",
+            "GroupSet": [
+              {
+                "Ref": "SecurityGroup"
+              }
+            ],
+            "SubnetId": {
+              "Fn::Select": [
+                0,
+                {
+                  "Ref": "PublicSubnets"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Ec2Nat": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "DeleteOnTermination": "True",
+              "Encrypted": {
+                "Fn::If": [
+                  "Encrypted",
+                  "True",
+                  {
+                    "Ref": "AWS::NoValue"
+                  }
+                ]
+              },
+              "Iops": 200,
+              "VolumeSize": "50",
+              "VolumeType": "io1"
+            }
+          },
+          {
+            "DeviceName": "/dev/sdm",
+            "Ebs": {
+              "DeleteOnTermination": "True",
+              "Encrypted": {
+                "Fn::If": [
+                  "Encrypted",
+                  "True",
+                  {
+                    "Ref": "AWS::NoValue"
+                  }
+                ]
+              },
+              "VolumeSize": "100"
+            }
+          }
+        ],
+        "ImageId": {
+          "Fn::If": [
+            "Encrypted",
+            "ami-0e52796c8a8c65b00",
+            {
+              "Ref": "LatestAmiId"
+            }
+          ]
+        },
+        "InstanceType": "t3.micro",
+        "KeyName": "dev-ec2",
+        "NetworkInterfaces": [
+          {
+            "AssociatePublicIpAddress": "False",
+            "DeviceIndex": "0",
+            "GroupSet": [
+              {
+                "Ref": "SecurityGroup"
+              }
+            ],
+            "SubnetId": {
+              "Fn::Select": [
+                0,
+                {
+                  "Ref": "NatSubnets"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {}
+}

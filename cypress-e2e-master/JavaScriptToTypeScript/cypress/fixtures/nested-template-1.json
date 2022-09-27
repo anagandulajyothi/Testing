@@ -1,0 +1,785 @@
+{
+  "Description": "AWS CloudFormation Template for create kms key for a LZ in a VPC per Region in AWSAccount, Authors - Jun Hu Date -   March 22, 2019 Last Modified - March 22, 2019",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Type - a designated VPC will be used to host the application stack"
+          },
+          "Parameters": [
+            "EnvType",
+            "AppId",
+            "LandingZoneGuid",
+            "KmsKeyLabel"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Additional Ingress and Egress rules for App outside LandingZone"
+          },
+          "Parameters": [
+            "SGIngressForApp",
+            "SGEgressForApp"
+          ]
+        },
+        {
+          "Label": {
+            "default": "This allows to run this template in test Mode, it will add stack-name for all the resources to be created"
+          },
+          "Parameters": [
+            "FreddieCloudTestMode"
+          ]
+        },
+        {
+          "Label": {
+            "default": "The parameters in the SSM parameter store and should not be changed"
+          },
+          "Parameters": [
+            "BizUnit",
+            "AccountLabel",
+            "S3BucketL1Name",
+            "S3BucketR1Name",
+            "SSMPVersion"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "EnvType": {
+          "default": "Environment Type"
+        }
+      }
+    }
+  },
+  "Parameters": {
+    "DataCatalogue": {
+      "AllowedValues": [
+        "P918",
+        "M190",
+        "B850",
+        "F599"
+      ],
+      "Description": "Catalog value for the data",
+      "Type": "String"
+    },
+    "EnvType": {
+      "AllowedValues": [
+        "external-sandbox",
+        "internal-poc",
+        "dev",
+        "integration",
+        "uat",
+        "non-prod",
+        "customer-testing",
+        "enclave",
+        "prod"
+      ],
+      "ConstraintDescription": "must be external-sandbox, internal-poc, dev, integration, uat, non-prod, customer-testing, enclave or prod.",
+      "Default": "dev",
+      "Description": "Environment type used for the workload",
+      "Type": "String"
+    },
+    "AppId": {
+      "Default": "DataScience",
+      "Type": "String"
+    },
+    "LandingZoneGuid": {
+      "Description": "LandingZoneGuid, should be the top stack name, if LOGICAL_NULL, it will be this stack name",
+      "Default": "LOGICAL_NULL",
+      "Type": "String"
+    },
+    "KmsKeyLabel": {
+      "Description": "SecurityGroupLabel in a meaningful way, ...",
+      "Type": "String"
+    },
+    "KmsKeyAccessRole1": {
+      "Description": "Additional Roles for the application to access the key",
+      "Default": "LOGICAL_NULL",
+      "Type": "String"
+    },
+    "KmsKeyAccessRole2": {
+      "Description": "Additional Roles for the application to access the key",
+      "Default": "LOGICAL_NULL",
+      "Type": "String"
+    },
+    "AccountLabel": {
+      "Default": "AccountLabel",
+      "AllowedValues": [
+        "AccountLabel"
+      ],
+      "Description": "The AWS Account Label",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "BizUnit": {
+      "Default": "AccountBizUnit",
+      "AllowedValues": [
+        "AccountBizUnit"
+      ],
+      "Description": "The business unit for whom this VPC is being created",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "S3BucketL1Name": {
+      "Default": "S3BucketL1Name",
+      "AllowedValues": [
+        "S3BucketL1Name"
+      ],
+      "Description": "The S3 Bucket in the region for Freddie Cloud metadata",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "S3BucketR1Name": {
+      "Default": "S3BucketR1Name",
+      "AllowedValues": [
+        "S3BucketR1Name"
+      ],
+      "Description": "The S3 Bucket in the remote region for Freddie Cloud metadata",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "S3ReplicatorRoleArn": {
+      "Default": "S3ReplicatorRoleArn",
+      "AllowedValues": [
+        "S3ReplicatorRoleArn"
+      ],
+      "Description": "The S3 Bucket in the remote region for Freddie Cloud metadata",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "SSMPVersion": {
+      "Default": 1,
+      "Description": "The version of SSM parameters, not used yet",
+      "Type": "String"
+    },
+    "FreddieCloudTestMode": {
+      "Default": "LOGICAL_NULL",
+      "Description": "Force Freddie Cloud into using test version of metadata products",
+      "Type": "String"
+    }
+  },
+  "Conditions": {
+    "Is-FreddieCloudProd": {
+      "Fn::Equals": [
+        {
+          "Ref": "FreddieCloudTestMode"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Is-NoLandingZoneGuid": {
+      "Fn::Equals": [
+        {
+          "Ref": "LandingZoneGuid"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Is-NoKmsKeyAccessRole1": {
+      "Fn::Equals": [
+        {
+          "Ref": "KmsKeyAccessRole1"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Is-NoKmsKeyAccessRole2": {
+      "Fn::Equals": [
+        {
+          "Ref": "KmsKeyAccessRole2"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Is-UsEast1Region": {
+      "Fn::Equals": [
+        {
+          "Ref": "AWS::Region"
+        },
+        "us-east-1"
+      ]
+    },
+    "Is-UsWest2Region": {
+      "Fn::Equals": [
+        {
+          "Ref": "AWS::Region"
+        },
+        "us-west-2"
+      ]
+    },
+    "Is-UsEast2Region": {
+      "Fn::Equals": [
+        {
+          "Ref": "AWS::Region"
+        },
+        "us-east-2"
+      ]
+    }
+  },
+  "Resources": {
+    "LzMasterKey": {
+      "Properties": {
+        "Description": {
+          "Fn::Join": [
+            " ",
+            [
+              "Master Key for this LZ",
+              {
+                "Ref": "LandingZoneGuid"
+              }
+            ]
+          ]
+        },
+        "Enabled": "true",
+        "EnableKeyRotation": "true",
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Id": {
+            "Fn::Join": [
+              "-",
+              [
+                "master",
+                "lz",
+                "key",
+                {
+                  "Ref": "LandingZoneGuid"
+                }
+              ]
+            ]
+          },
+          "Statement": [
+            {
+              "Sid": "Allow administration of the key by the Account root user",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":root"
+                      ]
+                    ]
+                  }
+                ]
+              },
+              "Action": [
+                "kms:*"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow administration of the key",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "adminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "cloudadminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "landingzoneadminrolebyadfs"
+                      ]
+                    ]
+                  }
+                ]
+              },
+              "Action": [
+                "kms:Create*",
+                "kms:Describe*",
+                "kms:Enable*",
+                "kms:List*",
+                "kms:Put*",
+                "kms:Update*",
+                "kms:Revoke*",
+                "kms:Disable*",
+                "kms:Get*",
+                "kms:Delete*",
+                "kms:TagResource",
+                "kms:UntagResource",
+                "kms:ScheduleKeyDeletion",
+                "kms:CancelKeyDeletion"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow use of the key",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "adminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "cloudadminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "landingzoneadminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::If": [
+                      "Is-NoKmsKeyAccessRole1",
+                      {
+                        "Ref": "AWS::NoValue"
+                      },
+                      {
+                        "Ref": "KmsKeyAccessRole1"
+                      }
+                    ]
+                  },
+                  {
+                    "Fn::If": [
+                      "Is-NoKmsKeyAccessRole2",
+                      {
+                        "Ref": "AWS::NoValue"
+                      },
+                      {
+                        "Ref": "KmsKeyAccessRole2"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow attachment of persistent resources",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "adminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "cloudadminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:iam::",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":role/",
+                        {
+                          "Ref": "AccountLabel"
+                        },
+                        "landingzoneadminrolebyadfs"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::If": [
+                      "Is-NoKmsKeyAccessRole1",
+                      {
+                        "Ref": "AWS::NoValue"
+                      },
+                      {
+                        "Ref": "KmsKeyAccessRole1"
+                      }
+                    ]
+                  },
+                  {
+                    "Fn::If": [
+                      "Is-NoKmsKeyAccessRole2",
+                      {
+                        "Ref": "AWS::NoValue"
+                      },
+                      {
+                        "Ref": "KmsKeyAccessRole2"
+                      }
+                    ]
+                  },
+                  {
+                    "Ref": "S3ReplicatorRoleArn"
+                  }
+                ]
+              },
+              "Action": [
+                "kms:CreateGrant",
+                "kms:ListGrants",
+                "kms:RevokeGrant"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "Bool": {
+                  "kms:GrantIsForAWSResource": [
+                    true
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "/",
+                [
+                  "/fmac-aws",
+                  {
+                    "Ref": "AccountLabel"
+                  },
+                  {
+                    "Ref": "AWS::Region"
+                  },
+                  "vpc",
+                  {
+                    "Ref": "EnvType"
+                  },
+                  "lz",
+                  {
+                    "Fn::If": [
+                      "Is-NoLandingZoneGuid",
+                      {
+                        "Ref": "AWS::StackName"
+                      },
+                      {
+                        "Ref": "LandingZoneGuid"
+                      }
+                    ]
+                  },
+                  "kmskey",
+                  {
+                    "Fn::Join": [
+                      "-",
+                      [
+                        {
+                          "Ref": "KmsKeyLabel"
+                        },
+                        "kmskey"
+                      ]
+                    ]
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "fm_aws_name",
+            "Value": {
+              "Fn::Join": [
+                "/",
+                [
+                  "/fmac-aws",
+                  {
+                    "Ref": "AccountLabel"
+                  },
+                  {
+                    "Ref": "AWS::Region"
+                  },
+                  "vpc",
+                  {
+                    "Ref": "EnvType"
+                  },
+                  "lz",
+                  {
+                    "Fn::If": [
+                      "Is-NoLandingZoneGuid",
+                      {
+                        "Ref": "AWS::StackName"
+                      },
+                      {
+                        "Ref": "LandingZoneGuid"
+                      }
+                    ]
+                  },
+                  "kmskey",
+                  {
+                    "Fn::Join": [
+                      "-",
+                      [
+                        {
+                          "Ref": "KmsKeyLabel"
+                        },
+                        "kmskey"
+                      ]
+                    ]
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "Key": "fm_aws_environmentType",
+            "Value": {
+              "Ref": "EnvType"
+            }
+          },
+          {
+            "Key": "fm_aws_businessUnit",
+            "Value": {
+              "Ref": "BizUnit"
+            }
+          },
+          {
+            "Key": "fm_aws_applicationId",
+            "Value": {
+              "Ref": "AppId"
+            }
+          },
+          {
+            "Key": "fm_aws_landingZoneGuid",
+            "Value": {
+              "Fn::If": [
+                "Is-NoLandingZoneGuid",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                {
+                  "Ref": "LandingZoneGuid"
+                }
+              ]
+            }
+          },
+          {
+            "Key": "fm_aws_dCatalogue",
+            "Value": {
+              "Ref": "DataCatalogue"
+            }
+          }
+        ]
+      },
+      "Type": "AWS::KMS::Key"
+    },
+    "LzMasterKeyAlias": {
+      "Properties": {
+        "AliasName": {
+          "Fn::Join": [
+            "/",
+            [
+              "alias/fmac-aws",
+              {
+                "Ref": "AccountLabel"
+              },
+              {
+                "Ref": "AWS::Region"
+              },
+              "vpc",
+              {
+                "Ref": "EnvType"
+              },
+              "lz",
+              {
+                "Fn::If": [
+                  "Is-NoLandingZoneGuid",
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  {
+                    "Ref": "LandingZoneGuid"
+                  }
+                ]
+              },
+              "kmskey",
+              {
+                "Fn::Join": [
+                  "-",
+                  [
+                    {
+                      "Ref": "KmsKeyLabel"
+                    },
+                    "kmskey"
+                  ]
+                ]
+              }
+            ]
+          ]
+        },
+        "TargetKeyId": {
+          "Fn::GetAtt": [
+            "LzMasterKey",
+            "Arn"
+          ]
+        }
+      },
+      "Type": "AWS::KMS::Alias"
+    },
+    "LzMasterKeySSM": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Join": [
+            "/",
+            [
+              "/fmac-aws",
+              {
+                "Ref": "AccountLabel"
+              },
+              {
+                "Ref": "AWS::Region"
+              },
+              "vpc",
+              {
+                "Ref": "EnvType"
+              },
+              "lz",
+              {
+                "Fn::If": [
+                  "Is-NoLandingZoneGuid",
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  {
+                    "Ref": "LandingZoneGuid"
+                  }
+                ]
+              },
+              "kmskey",
+              {
+                "Fn::Join": [
+                  "-",
+                  [
+                    {
+                      "Ref": "KmsKeyLabel"
+                    },
+                    "kmskey"
+                  ]
+                ]
+              }
+            ]
+          ]
+        },
+        "Type": "String",
+        "Value": {
+          "Fn::GetAtt": [
+            "LzMasterKey",
+            "Arn"
+          ]
+        },
+        "Description": "this self-referencing security group in the landingzone SSM parameter"
+      }
+    }
+  },
+  "Outputs": {
+    "KeyAlias": {
+      "Description": "key alias for the key",
+      "Value": {
+        "Ref": "LzMasterKeyAlias"
+      }
+    },
+    "KeyArn": {
+      "Description": "key alias for the key",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzMasterKey",
+          "Arn"
+        ]
+      }
+    }
+  }
+}

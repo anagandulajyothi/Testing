@@ -1,0 +1,964 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This reference architecture provides a set of YAML templates for deploying the Landing Zone Boundary to Freddie Mac's AWS accounts using Amazon Virtual Private Cloud (Amazon VPC) by creating the following security resources\n- A self-reference security group to be used as network boundary\n- A KMS key to be used  to encrypted all data\n- A few IAM roles associated with EC2 instance profile to be used to access the KMS key through key policy and Data in S3 Bucket through bucket policy\n",
+  "Metadata": {
+    "ProjectName": "Data Science Landing Zone",
+    "Owner": "jim_thompson@freddiemac.com",
+    "TemplateType": "landing-zone",
+    "Version": "0.1.0",
+    "StepsToTest": "Execute validation scripts\n```\n  pytest -v tests/dsvm tests/s3\n```\n"
+  },
+  "Parameters": {
+    "LzOutOfRegion": {
+      "AllowedValues": [
+        "LOGICAL_NULL",
+        "us-west-2",
+        "us-east-2"
+      ],
+      "Description": "Whether to create Landing Zone resources S3 in the remote region",
+      "Default": "LOGICAL_NULL",
+      "Type": "String"
+    },
+    "DataClassification": {
+      "AllowedValues": [
+        "public",
+        "nonpublic",
+        "confidential",
+        "restricted"
+      ],
+      "Description": "Data classification in the Landing Zone",
+      "Default": "nonpublic",
+      "Type": "String"
+    },
+    "LandingZoneType": {
+      "AllowedValues": [
+        "datascience",
+        "hpcgrid",
+        "eks",
+        "datarobot",
+        "emr",
+        "bdap"
+      ],
+      "Description": "LandingZone Type that will define IAM role permissions and it will also be used as part of naming scheme",
+      "Type": "String"
+    },
+    "S3Bucket": {
+      "Default": true,
+      "AllowedValues": [
+        "LOGICAL_NULL",
+        true
+      ],
+      "Description": "non LOGICAL_NULL will have S3 bucket created",
+      "Type": "String"
+    },
+    "EfsMountPoint": {
+      "Default": "LOGICAL_NULL",
+      "AllowedValues": [
+        "LOGICAL_NULL",
+        "/fmac"
+      ],
+      "Description": "non LOGICAL_NULL will have Efs and mount targets created",
+      "Type": "String"
+    },
+    "ExistingEfsVolumeName": {
+      "Default": "LOGICAL_NULL",
+      "Description": "LOGICAL_NULL will have Efs and mount targets created",
+      "Type": "String"
+    },
+    "CrudHostAccessADGroup": {
+      "Default": "NA",
+      "Description": "AD Group to access ec2 instance with crud role to S3 Bucket",
+      "Type": "String"
+    },
+    "ReadOnlyHostAccessADGroup": {
+      "Default": "NA",
+      "Description": "AD Group to access ec2 instance with readonly role to S3 Bucekt",
+      "Type": "String"
+    },
+    "SGIngressForApp": {
+      "Default": "LOGICAL_NULL",
+      "Description": "Additional Ingress rule for self-referencing Secruity group in the format of protocol:source:port",
+      "Type": "String"
+    },
+    "SGEgressForApp": {
+      "Default": "LOGICAL_NULL",
+      "Description": "Additional Egress rule for self-referencing Secruity group in the format of protocol:source:port",
+      "Type": "String"
+    },
+    "AppId": {
+      "Default": "DataScience",
+      "Type": "String"
+    },
+    "EnvType": {
+      "AllowedValues": [
+        "non-prod",
+        "external-sandbox",
+        "internal-poc",
+        "dev",
+        "integration",
+        "uat",
+        "customer-testing",
+        "enclave",
+        "prod"
+      ],
+      "ConstraintDescription": "must be an acceptable environment type.",
+      "Default": "internal-poc",
+      "Description": "classification of the environment",
+      "Type": "String"
+    },
+    "BizUnit": {
+      "Default": "AccountBizUnit",
+      "AllowedValues": [
+        "AccountBizUnit"
+      ],
+      "Description": "The BizUnit for this AWS Account",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "S3BucketL1Name": {
+      "Default": "S3BucketL1Name",
+      "AllowedValues": [
+        "S3BucketL1Name"
+      ],
+      "Description": "The logicla name of S3 bucket for cloudformation meta-data in this region",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "S3BucketR1Name": {
+      "Default": "S3BucketR1Name",
+      "AllowedValues": [
+        "S3BucketR1Name"
+      ],
+      "Description": "The logicla name of S3 bucket for cloudformation meta-data in this region",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "AccountLabel": {
+      "Default": "AccountLabel",
+      "AllowedValues": [
+        "AccountLabel"
+      ],
+      "Description": "The Label for this AWS Account",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "LookupVpcArn": {
+      "AllowedValues": [
+        "AccountLambda-LookupVpc"
+      ],
+      "Default": "AccountLambda-LookupVpc",
+      "Description": "The Label for this AWS Account",
+      "Type": "AWS::SSM::Parameter::Value<String>"
+    },
+    "FreddieCloudTestMode": {
+      "Default": "test",
+      "AllowedValues": [
+        "LOGICAL_NULL",
+        "prod",
+        "qa",
+        "test",
+        "prod-prev"
+      ],
+      "Description": "Force Freddie Cloud into using test version of metadata products",
+      "Type": "String"
+    }
+  },
+  "Conditions": {
+    "Is-FreddieCloudProd": {
+      "Fn::Equals": [
+        {
+          "Ref": "FreddieCloudTestMode"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Is-S3Bucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "S3Bucket"
+        },
+        true
+      ]
+    },
+    "Is-NoLzOutOfRegion": {
+      "Fn::Equals": [
+        {
+          "Ref": "LzOutOfRegion"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Is-LzOutOfRegion": {
+      "Fn::Not": [
+        {
+          "Condition": "Is-NoLzOutOfRegion"
+        }
+      ]
+    },
+    "Is-Without-Efs": {
+      "Fn::Equals": [
+        {
+          "Ref": "EfsMountPoint"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Is-Using-Efs": {
+      "Fn::Not": [
+        {
+          "Condition": "Is-Without-Efs"
+        }
+      ]
+    },
+    "Is-Creating-New-Efs-Volume": {
+      "Fn::Equals": [
+        {
+          "Ref": "ExistingEfsVolumeName"
+        },
+        "LOGICAL_NULL"
+      ]
+    },
+    "Create-Efs-Volume": {
+      "Fn::And": [
+        {
+          "Condition": "Is-Using-Efs"
+        },
+        {
+          "Condition": "Is-Creating-New-Efs-Volume"
+        }
+      ]
+    }
+  },
+  "Mappings": {
+    "DataClassification2DataCatalogue": {
+      "public": {
+        "DataCatalogue": "F599"
+      },
+      "nonpublic": {
+        "DataCatalogue": "B850"
+      },
+      "confidential": {
+        "DataCatalogue": "M190"
+      },
+      "restricted": {
+        "DataCatalogue": "P918"
+      }
+    }
+  },
+  "Resources": {
+    "LzSelfRefSG": {
+      "Properties": {
+        "Parameters": {
+          "EnvType": {
+            "Ref": "EnvType"
+          },
+          "AppId": {
+            "Ref": "AppId"
+          },
+          "DataCatalogue": {
+            "Fn::FindInMap": [
+              "DataClassification2DataCatalogue",
+              {
+                "Ref": "DataClassification"
+              },
+              "DataCatalogue"
+            ]
+          },
+          "LandingZoneGuid": {
+            "Ref": "AWS::StackName"
+          },
+          "SecurityGroupLabel": {
+            "Ref": "LandingZoneType"
+          },
+          "SGIngressForApp": {
+            "Ref": "SGIngressForApp"
+          },
+          "SGEgressForApp": {
+            "Ref": "SGEgressForApp"
+          },
+          "FreddieCloudTestMode": {
+            "Ref": "FreddieCloudTestMode"
+          }
+        },
+        "TemplateURL": {
+          "Fn::Join": [
+            "/",
+            [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "https://s3.",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ".amazonaws.com"
+                  ]
+                ]
+              },
+              {
+                "Ref": "S3BucketL1Name"
+              },
+              {
+                "Fn::If": [
+                  "Is-FreddieCloudProd",
+                  "prod",
+                  {
+                    "Ref": "FreddieCloudTestMode"
+                  }
+                ]
+              },
+              "infosec/security-group",
+              "AWSAccountVPCLzSecurityGroup.yaml"
+            ]
+          ]
+        },
+        "TimeoutInMinutes": "60"
+      },
+      "Type": "AWS::CloudFormation::Stack"
+    },
+    "LzCrudRole": {
+      "Properties": {
+        "Parameters": {
+          "EnvType": {
+            "Ref": "EnvType"
+          },
+          "LandingZoneGuid": {
+            "Ref": "AWS::StackName"
+          },
+          "RoleLabel": {
+            "Fn::Join": [
+              "-",
+              [
+                {
+                  "Ref": "LandingZoneType"
+                },
+                "crud"
+              ]
+            ]
+          },
+          "RoleType": {
+            "Ref": "LandingZoneType"
+          },
+          "S3BucketReadWriteForApp": "LOGICAL_NULL",
+          "S3BucketReadOnlyForApp": "LOGICAL_NULL",
+          "HostAccessADGroup": {
+            "Ref": "CrudHostAccessADGroup"
+          },
+          "SudoAccessADGroup": "NA",
+          "FreddieCloudTestMode": {
+            "Ref": "FreddieCloudTestMode"
+          }
+        },
+        "TemplateURL": {
+          "Fn::Join": [
+            "/",
+            [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "https://s3.",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ".amazonaws.com"
+                  ]
+                ]
+              },
+              {
+                "Ref": "S3BucketL1Name"
+              },
+              {
+                "Fn::If": [
+                  "Is-FreddieCloudProd",
+                  "prod",
+                  {
+                    "Ref": "FreddieCloudTestMode"
+                  }
+                ]
+              },
+              "infosec/iam",
+              "AWSAccountVPCLzRole.yaml"
+            ]
+          ]
+        },
+        "TimeoutInMinutes": "60"
+      },
+      "Type": "AWS::CloudFormation::Stack"
+    },
+    "LzReaderRole": {
+      "Properties": {
+        "Parameters": {
+          "EnvType": {
+            "Ref": "EnvType"
+          },
+          "LandingZoneGuid": {
+            "Ref": "AWS::StackName"
+          },
+          "RoleLabel": {
+            "Fn::Join": [
+              "-",
+              [
+                {
+                  "Ref": "LandingZoneType"
+                },
+                "reader"
+              ]
+            ]
+          },
+          "RoleType": {
+            "Ref": "LandingZoneType"
+          },
+          "S3BucketReadWriteForApp": "LOGICAL_NULL",
+          "S3BucketReadOnlyForApp": "LOGICAL_NULL",
+          "HostAccessADGroup": {
+            "Ref": "ReadOnlyHostAccessADGroup"
+          },
+          "SudoAccessADGroup": "NA",
+          "FreddieCloudTestMode": {
+            "Ref": "FreddieCloudTestMode"
+          }
+        },
+        "TemplateURL": {
+          "Fn::Join": [
+            "/",
+            [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "https://s3.",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ".amazonaws.com"
+                  ]
+                ]
+              },
+              {
+                "Ref": "S3BucketL1Name"
+              },
+              {
+                "Fn::If": [
+                  "Is-FreddieCloudProd",
+                  "prod",
+                  {
+                    "Ref": "FreddieCloudTestMode"
+                  }
+                ]
+              },
+              "infosec/iam",
+              "AWSAccountVPCLzRole.yaml"
+            ]
+          ]
+        },
+        "TimeoutInMinutes": "60"
+      },
+      "Type": "AWS::CloudFormation::Stack"
+    },
+    "LzMasterKey": {
+      "Properties": {
+        "Parameters": {
+          "EnvType": {
+            "Ref": "EnvType"
+          },
+          "AppId": {
+            "Ref": "AppId"
+          },
+          "DataCatalogue": {
+            "Fn::FindInMap": [
+              "DataClassification2DataCatalogue",
+              {
+                "Ref": "DataClassification"
+              },
+              "DataCatalogue"
+            ]
+          },
+          "LandingZoneGuid": {
+            "Ref": "AWS::StackName"
+          },
+          "KmsKeyLabel": "lz-keys",
+          "KmsKeyAccessRole1": {
+            "Fn::GetAtt": [
+              "LzCrudRole",
+              "Outputs.RoleArn"
+            ]
+          },
+          "KmsKeyAccessRole2": {
+            "Fn::GetAtt": [
+              "LzReaderRole",
+              "Outputs.RoleArn"
+            ]
+          },
+          "FreddieCloudTestMode": {
+            "Ref": "FreddieCloudTestMode"
+          }
+        },
+        "TemplateURL": {
+          "Fn::Join": [
+            "/",
+            [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "https://s3.",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ".amazonaws.com"
+                  ]
+                ]
+              },
+              {
+                "Ref": "S3BucketL1Name"
+              },
+              {
+                "Fn::If": [
+                  "Is-FreddieCloudProd",
+                  "prod",
+                  {
+                    "Ref": "FreddieCloudTestMode"
+                  }
+                ]
+              },
+              "infosec/kms-key",
+              "AWSAccountVPCLzKmsKey.yaml"
+            ]
+          ]
+        },
+        "TimeoutInMinutes": "60"
+      },
+      "Type": "AWS::CloudFormation::Stack"
+    },
+    "LzS3Bucket": {
+      "Properties": {
+        "Parameters": {
+          "AppId": {
+            "Ref": "AppId"
+          },
+          "ReplicationRegion": "LOGICAL_NULL",
+          "S3BucketLabel": {
+            "Ref": "LandingZoneType"
+          },
+          "BucketCrudRoleId": {
+            "Fn::GetAtt": [
+              "LzCrudRole",
+              "Outputs.RoleId"
+            ]
+          },
+          "BucketReaderRoleId": {
+            "Fn::GetAtt": [
+              "LzReaderRole",
+              "Outputs.RoleId"
+            ]
+          },
+          "LandingZoneGuid": {
+            "Ref": "AWS::StackName"
+          },
+          "LzMasterKeyArn": {
+            "Fn::GetAtt": [
+              "LzMasterKey",
+              "Outputs.KeyArn"
+            ]
+          },
+          "FreddieCloudTestMode": {
+            "Ref": "FreddieCloudTestMode"
+          },
+          "DataCatalogue": {
+            "Fn::FindInMap": [
+              "DataClassification2DataCatalogue",
+              {
+                "Ref": "DataClassification"
+              },
+              "DataCatalogue"
+            ]
+          }
+        },
+        "TemplateURL": {
+          "Fn::Join": [
+            "/",
+            [
+              {
+                "Fn::Join": [
+                  "",
+                  [
+                    "https://s3.",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ".amazonaws.com"
+                  ]
+                ]
+              },
+              {
+                "Ref": "S3BucketL1Name"
+              },
+              {
+                "Fn::If": [
+                  "Is-FreddieCloudProd",
+                  "prod",
+                  {
+                    "Ref": "FreddieCloudTestMode"
+                  }
+                ]
+              },
+              "core",
+              "LandingZoneS3BucketCore.yaml"
+            ]
+          ]
+        },
+        "TimeoutInMinutes": "60"
+      },
+      "Type": "AWS::CloudFormation::Stack"
+    },
+    "ElasticFileSystem": {
+      "Condition": "Create-Efs-Volume",
+      "Type": "AWS::EFS::FileSystem",
+      "Properties": {
+        "PerformanceMode": "generalPurpose",
+        "Encrypted": true,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "LzMasterKey",
+            "Outputs.KeyArn"
+          ]
+        },
+        "FileSystemTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "AWS::StackName"
+            }
+          },
+          {
+            "Key": "fm_aws_name",
+            "Value": {
+              "Ref": "AWS::StackName"
+            }
+          },
+          {
+            "Key": "fm_aws_environmentType",
+            "Value": {
+              "Ref": "EnvType"
+            }
+          },
+          {
+            "Key": "fm_aws_businessUnit",
+            "Value": {
+              "Ref": "BizUnit"
+            }
+          },
+          {
+            "Key": "fm_aws_applicationId",
+            "Value": {
+              "Ref": "AppId"
+            }
+          },
+          {
+            "Key": "fm_aws_landingZoneGuid",
+            "Value": {
+              "Ref": "AWS::StackName"
+            }
+          }
+        ]
+      }
+    },
+    "LookupVpcMetadata": {
+      "Properties": {
+        "ServiceToken": {
+          "Ref": "LookupVpcArn"
+        },
+        "ENV_TYPE": {
+          "Ref": "EnvType"
+        },
+        "region": {
+          "Ref": "AWS::Region"
+        },
+        "BIZ_UNIT": {
+          "Ref": "BizUnit"
+        },
+        "DEPLOYMENT_ZONE": "private",
+        "WORKLOAD_TYPE": "admin",
+        "APP_ID": {
+          "Ref": "AppId"
+        },
+        "osFamily": "linux"
+      },
+      "Type": "Custom::VPCMetadataLookup"
+    },
+    "EfsMountTarget0": {
+      "Condition": "Create-Efs-Volume",
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": {
+          "Ref": "ElasticFileSystem"
+        },
+        "SubnetId": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAtt": [
+                "LookupVpcMetadata",
+                "privateSubnetIds"
+              ]
+            }
+          ]
+        },
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "LzSelfRefSG",
+              "Outputs.SecurityGroupId"
+            ]
+          }
+        ]
+      }
+    },
+    "EfsMountTarget1": {
+      "Condition": "Create-Efs-Volume",
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": {
+          "Ref": "ElasticFileSystem"
+        },
+        "SubnetId": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAtt": [
+                "LookupVpcMetadata",
+                "privateSubnetIds"
+              ]
+            }
+          ]
+        },
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "LzSelfRefSG",
+              "Outputs.SecurityGroupId"
+            ]
+          }
+        ]
+      }
+    },
+    "EfsMountTarget2": {
+      "Condition": "Create-Efs-Volume",
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": {
+          "Ref": "ElasticFileSystem"
+        },
+        "SubnetId": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAtt": [
+                "LookupVpcMetadata",
+                "privateSubnetIds"
+              ]
+            }
+          ]
+        },
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "LzSelfRefSG",
+              "Outputs.SecurityGroupId"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "LzSelfRefSG": {
+      "Description": "The ARN for the LZ Master Key",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzSelfRefSG",
+          "Outputs.SecurityGroupId"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzSelfRefSGGroupId"
+        }
+      }
+    },
+    "LzMasterKeyAlias": {
+      "Description": "The Alias for the LZ Master Key",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzMasterKey",
+          "Outputs.KeyAlias"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzMasterKeyAlias"
+        }
+      }
+    },
+    "LzMasterKeyArn": {
+      "Description": "The ARN for the LZ Master Key",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzMasterKey",
+          "Outputs.KeyArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzMasterKeyArn"
+        }
+      }
+    },
+    "LzS3Bucket": {
+      "Description": "S3 bucket for the LZ",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzS3Bucket",
+          "Outputs.S3BucketName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzS3BucketName"
+        }
+      }
+    },
+    "LzCrudRole": {
+      "Description": "CrudRole for the LZ",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzCrudRole",
+          "Outputs.RoleName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzCrudRoleName"
+        }
+      }
+    },
+    "LzCrudRoleArn": {
+      "Description": "CrudRole Arn for the LZ",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzCrudRole",
+          "Outputs.RoleArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzCrudRoleArn"
+        }
+      }
+    },
+    "LzCrudRoleId": {
+      "Description": "CrudRole Id for the LZ",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzCrudRole",
+          "Outputs.RoleId"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzCrudRoleId"
+        }
+      }
+    },
+    "LzReaderRole": {
+      "Description": "ReaderRole for the LZ",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzReaderRole",
+          "Outputs.RoleName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzReaderRoleName"
+        }
+      }
+    },
+    "LzReaderRoleArn": {
+      "Description": "ReaderRole Arn for the LZ",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzReaderRole",
+          "Outputs.RoleArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzReaderRoleArn"
+        }
+      }
+    },
+    "LzReaderRoleId": {
+      "Description": "ReaderRole Id for the LZ",
+      "Value": {
+        "Fn::GetAtt": [
+          "LzReaderRole",
+          "Outputs.RoleId"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LzReaderRoleId"
+        }
+      }
+    },
+    "CrudHostAccessADGroup": {
+      "Description": "AD group to access to crud role",
+      "Value": {
+        "Ref": "CrudHostAccessADGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CrudHostAccessADGroup"
+        }
+      }
+    },
+    "ReadOnlyHostAccessADGroup": {
+      "Description": "AD group to access to reader role",
+      "Value": {
+        "Ref": "ReadOnlyHostAccessADGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReadOnlyHostAccessADGroup"
+        }
+      }
+    },
+    "ElasticFileSystemId": {
+      "Description": "The EFS ID",
+      "Value": {
+        "Ref": "ElasticFileSystem"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ElasticFileSystemId"
+        }
+      }
+    },
+    "DataCatalogue": {
+      "Description": "The DataCatalogue for the data classification in this landing zone",
+      "Value": {
+        "Fn::FindInMap": [
+          "DataClassification2DataCatalogue",
+          {
+            "Ref": "DataClassification"
+          },
+          "DataCatalogue"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DataCatalogue"
+        }
+      }
+    }
+  }
+}

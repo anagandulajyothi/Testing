@@ -1,0 +1,113 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Metadata": {},
+    "Parameters": {
+        "Encrypt": {
+            "Type": "String",
+	    "Description": "AS",
+            "Default": "False",
+            "AllowedValues": [
+                "True",
+                "False"
+            ],
+            "Description": "True or False"
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs"
+        },
+        "NatSubnets": {
+            "Type": "CommaDelimitedList",
+            "Default": "subnet-008c4281d7f616dd0,subnet-0d0f96d204d15b42d,subnet-0a095dc9cb9440ef5"
+        },
+        "PrivateSubnets": {
+            "Type": "CommaDelimitedList",
+            "Default": "subnet-04154e1e45baecdd8,subnet-01afb6954d7cc5a30,subnet-0c2f7510d9d9826db"
+        },
+        "PublicSubnets": {
+            "Type": "CommaDelimitedList",
+            "Default": "subnet-09d6e3f0afecbe82c,subnet-04f7a913b459dd298,subnet-0cd519558db089129"
+        },
+        "S3VpcEp": {
+            "Type": "String",
+            "Default": "vpce-014d753e96a27a411"
+        },
+        "SecurityGroup": {
+            "Type": "String",
+            "Default": "sg-0a58c1694b69370ee",
+            "Description": "Sec grp id"
+        },
+        "Subnets": {
+            "Type": "CommaDelimitedList",
+            "Default": "subnet-0c871349f04d7e275, subnet-07bf24e7171e7d98f"
+        },
+        "Vpc": {
+            "Type": "String",
+            "Default": "vpc-0171c6dc35a7b34d1"
+        }
+    },
+    "Mappings": {},
+    "Conditions": {
+        "Encrypted": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Encrypt"
+                },
+                "True"
+            ]
+        }
+    },
+    "Resources": {
+        "Core": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "4dd68e5f-5fc0-4ae8-872e-a8302e0e3735"
+                }
+            },
+            "Properties": {
+                "TemplateURL": "https://concourse-bobprod-templates.s3.amazonaws.com/Sample-Bad/core.json"
+            }
+        },
+        "Ec2": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "663545eb-aff2-431b-8aaf-5dbf8e8346dc"
+                }
+            },
+            "Properties": {
+                "Parameters": {
+                    "Encrypt": "False",
+                    "SecurityGroup": {
+                        "Fn::GetAtt": [
+                            "Core",
+                            "Outputs.SecurityGroup"
+                        ]
+                    }
+                },
+                "TemplateURL": "https://concourse-bobprod-templates.s3.amazonaws.com/Sample-Bad/ec2.json"
+            }
+        },
+        "S3": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "634922e0-a672-454d-a1a0-478d31eb4d21"
+                }
+            },
+            "Properties": {
+                "Parameters": {
+                    "KmsKeyArn": {
+                        "Fn::GetAtt": [
+                            "Core",
+                            "Outputs.KmsKeyArn"
+                        ]
+                    }
+                },
+                "TemplateURL": "https://concourse-bobprod-templates.s3.amazonaws.com/Sample-Bad/S3.json"
+            }
+        }
+    },
+    "Outputs": {}
+}

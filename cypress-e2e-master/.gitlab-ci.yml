@@ -1,0 +1,20 @@
+image: cypress/base:10
+
+variables:
+  GIT_LAB_RUNNER_ENV: "dev1"
+
+
+stages:
+  - test
+
+
+
+local-e2e:
+  stage: test
+  tags:
+    - "$GIT_LAB_RUNNER_ENV"
+
+  script:
+    - npm install
+    - npx cypress run --config baseUrl=http://prod.concourselabs.io --record --key 91ae2a99-0880-4998-af25-5cf6737e8edc
+  timeout: 4h

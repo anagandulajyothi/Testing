@@ -1,0 +1,29 @@
+{
+  "name": "cypress-e2e",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "cypress open",
+    "cy:adhoc": "cypress open --config baseUrl=https://adhoc.concourse.company/",
+    "cy:beta": "cypress open --config baseUrl=https://beta.concourse.company/",
+    "cy:prod": "cypress open  --config baseUrl=https://prod.concourselabs.io/",
+    "delete:reportFolder": "rm -rf mochawesome-report/",
+    "test:cli": "npm run delete:reportFolder && cypress run",
+    "merge:reports": "mochawesome-merge mochawesome-report/*.json > cypress-combined-report.json",
+    "create:html:report": "npm run merge:reports && marge --reportDir TestReport cypress-combined-report.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.concourse.company/e2e-testing/cypress-e2e.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "cypress": "^9.7.0"
+  },
+  "dependencies": {
+    "cypress-xpath": "^1.6.2",
+    "typescript": "^4.6.4"
+  }
+}

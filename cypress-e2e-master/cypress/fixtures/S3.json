@@ -1,0 +1,405 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Metadata": {},
+  "Parameters": {
+    "KmsKeyArn": {
+      "Type": "String",
+      "Description": "Required kms key arn "
+    },
+    "NatSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-008c4281d7f616dd0,subnet-0d0f96d204d15b42d,subnet-0a095dc9cb9440ef5"
+    },
+    "PrivateSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-04154e1e45baecdd8,subnet-01afb6954d7cc5a30,subnet-0c2f7510d9d9826db"
+    },
+    "PublicSubnets": {
+      "Type": "CommaDelimitedList",
+      "Default": "subnet-09d6e3f0afecbe82c,subnet-04f7a913b459dd298,subnet-0cd519558db089129"
+    },
+    "S3VpcEp": {
+      "Type": "String",
+      "Default": "vpce-014d753e96a27a411"
+    },
+    "Vpc": {
+      "Type": "String",
+      "Default": "vpc-0171c6dc35a7b34d1"
+    }
+  },
+  "Mappings": {},
+  "Conditions": {},
+  "Resources": {
+    "S3Bad": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": "False",
+          "BlockPublicPolicy": "False",
+          "IgnorePublicAcls": "False",
+          "RestrictPublicBuckets": "False"
+        }
+      }
+    },
+    "S3BadAes": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": "True",
+          "BlockPublicPolicy": "True",
+          "IgnorePublicAcls": "True",
+          "RestrictPublicBuckets": "True"
+        }
+      }
+    },
+    "S3BadAesPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "S3BadAes"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "S3BadAes",
+                        "Arn"
+                      ]
+                    },
+                    "*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "StringNotLikeIfExists": {
+                  "s3:x-amz-server-side-encryption-aws-kms-key-id": {
+                    "Ref": "KmsKeyArn"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "S3BadAes",
+                        "Arn"
+                      ]
+                    },
+                    "*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "S3BadKms": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "KMSMasterKeyID": {
+                  "Ref": "KmsKeyArn"
+                },
+                "SSEAlgorithm": "aws:kms"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": "True",
+          "BlockPublicPolicy": "True",
+          "IgnorePublicAcls": "True",
+          "RestrictPublicBuckets": "True"
+        }
+      }
+    },
+    "S3BadKmsPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "S3BadKms"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Access-to-specific-VPC s-only",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": [
+                "s3:DeleteObject",
+                "s3:DeleteObjectTagging",
+                "s3:DeleteObjectVersion",
+                "s3:DeleteObjectVersionTagging",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:GetObjectLegalHold",
+                "s3:GetObjectRetention",
+                "s3:ObjectOwnerOverrideToBucketOwner",
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionAcl",
+                "s3:PutObjectVersionTagging"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "S3BadKms",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "/",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "S3BadKms",
+                          "Arn"
+                        ]
+                      },
+                      "*"
+                    ]
+                  ]
+                }
+              ],
+              "Condition": {
+                "StringNotEquals": {
+                  "aws:sourceVpc": {
+                    "Ref": "Vpc"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "DenyIncorrectEncryptionHeader",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "S3BadKms",
+                        "Arn"
+                      ]
+                    },
+                    "*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            },
+            {
+              "Sid": "DenyUnEncryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "S3BadKms",
+                        "Arn"
+                      ]
+                    },
+                    "*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "Null": {
+                  "s3:x-amz-server-side-encryption": true
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "S3BadVpce": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "KMSMasterKeyID": {
+                  "Ref": "KmsKeyArn"
+                },
+                "SSEAlgorithm": "aws:kms"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": "True",
+          "BlockPublicPolicy": "True",
+          "IgnorePublicAcls": "True",
+          "RestrictPublicBuckets": "True"
+        }
+      }
+    },
+    "S3BadVpcePolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "S3BadVpce"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Access-to-specific-VP3s-only",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": [
+                "s3:DeleteObject",
+                "s3:DeleteObjectTagging",
+                "s3:DeleteObjectVersion",
+                "s3:DeleteObjectVersionTagging",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:GetObjectLegalHold",
+                "s3:GetObjectRetention",
+                "s3:ObjectOwnerOverrideToBucketOwner",
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionAcl",
+                "s3:PutObjectVersionTagging"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "S3BadVpce",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "/",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "S3BadVpce",
+                          "Arn"
+                        ]
+                      },
+                      "*"
+                    ]
+                  ]
+                }
+              ],
+              "Condition": {
+                "StringNotEquals": {
+                  "aws:sourceVpce": {
+                    "Ref": "S3VpcEp"
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "DenyIncorrectEncryptionHeader",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "S3BadVpce",
+                        "Arn"
+                      ]
+                    },
+                    "*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            },
+            {
+              "Sid": "DenyUnEncryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "/",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "S3BadVpce",
+                        "Arn"
+                      ]
+                    },
+                    "*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "Null": {
+                  "s3:x-amz-server-side-encryption": true
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {}
+}
